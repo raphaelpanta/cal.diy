@@ -1,3 +1,4 @@
+import process from "node:process";
 import type { Dayjs } from "@calcom/dayjs";
 import dayjs from "@calcom/dayjs";
 import type {
@@ -19,8 +20,49 @@ export type GetSlots = {
   datesOutOfOffice?: IOutOfOfficeData;
   showOptimizedSlots?: boolean | null;
   datesOutOfOfficeTimeZone?: string;
+  businessHours?: {
+    days: number[];
+    startTime: number;
+    endTime: number;
+  }[];
 };
 export type TimeFrame = { userIds?: number[]; startTime: number; endTime: number };
+
+// Default business hours (9:00-18:00)
+const DEFAULT_BUSINESS_HOURS = {
+  days: [1, 2, 3, 4, 5], // Monday-Friday
+  startTime: 9,
+  endTime: 18,
+};
+
+/**
+ * Check if a slot time is within business hours
+ */
+function isSlotWithinBusinessHours(
+  slotTime: Dayjs,
+  businessHours?: { days: number[]; startTime: number; endTime: number }[]
+) {
+  if (!businessHours || businessHours.length === 0) {
+    return true; // No business hours defined, consider all hours valid
+  }
+
+  const dayOfWeek = slotTime.day(); // 0 = Sunday, 1 = Monday, etc.
+  const hour = slotTime.hour();
+
+  return businessHours.some((bh) => {
+    // Check if day is in business days
+    if (!bh.days.includes(dayOfWeek)) {
+      return false;
+    }
+
+    // Check if hour is within business hours
+    if (hour < bh.startTime || hour >= bh.endTime) {
+      return false;
+    }
+
+    return true;
+  });
+}
 
 const minimumOfOne = (input: number) => (input < 1 ? 1 : input);
 
@@ -78,6 +120,7 @@ function buildSlotsWithDateRanges({
   datesOutOfOffice,
   showOptimizedSlots,
   datesOutOfOfficeTimeZone,
+  businessHours,
 }: {
   dateRanges: DateRange[];
   frequency: number;
@@ -88,6 +131,7 @@ function buildSlotsWithDateRanges({
   datesOutOfOffice?: IOutOfOfficeData;
   showOptimizedSlots?: boolean | null;
   datesOutOfOfficeTimeZone?: string;
+  businessHours?: { days: number[]; startTime: number; endTime: number }[];
 }) {
   // keep the old safeguards in; may be needed.
   frequency = minimumOfOne(frequency);
@@ -107,6 +151,7 @@ function buildSlotsWithDateRanges({
       toUser?: IToUser;
       reason?: string;
       emoji?: string;
+      isOutsideBusinessHours?: boolean;
     }
   >();
 
@@ -184,13 +229,16 @@ function buildSlotsWithDateRanges({
 
       slotBoundaries.set(slotStartTime.valueOf(), true);
 
-      let dateOutOfOfficeExists = undefined;
+      let dateOutOfOfficeExists;
       if (datesOutOfOffice) {
         const slotDateYYYYMMDD = datesOutOfOfficeTimeZone
           ? slotStartTime.tz(datesOutOfOfficeTimeZone).format("YYYY-MM-DD")
           : slotStartTime.utc().format("YYYY-MM-DD");
         dateOutOfOfficeExists = datesOutOfOffice?.[slotDateYYYYMMDD];
       }
+
+      // Check if slot is outside business hours
+      const isOutsideBusinessHours = !isSlotWithinBusinessHours(slotStartTime, businessHours);
 
       let slotData: {
         time: Dayjs;
@@ -202,6 +250,7 @@ function buildSlotsWithDateRanges({
         emoji?: string;
         notes?: string | null;
         showNotePublicly?: boolean;
+        isOutsideBusinessHours?: boolean;
       } = {
         time: slotStartTime,
       };
@@ -219,6 +268,11 @@ function buildSlotsWithDateRanges({
           ...(notes && showNotePublicly && { notes }),
           ...(showNotePublicly !== undefined && { showNotePublicly }),
         };
+      }
+
+      // Add isOutsideBusinessHours flag if slot is outside business hours
+      if (isOutsideBusinessHours) {
+        slotData.isOutsideBusinessHours = true;
       }
 
       slots.set(slotKey, slotData);
@@ -239,6 +293,7 @@ const getSlots = ({
   datesOutOfOffice,
   showOptimizedSlots,
   datesOutOfOfficeTimeZone,
+  businessHours,
 }: GetSlots): {
   time: Dayjs;
   userIds?: number[];
@@ -247,6 +302,7 @@ const getSlots = ({
   toUser?: IToUser;
   reason?: string;
   emoji?: string;
+  isOutsideBusinessHours?: boolean;
 }[] => {
   return buildSlotsWithDateRanges({
     dateRanges,
@@ -258,6 +314,7 @@ const getSlots = ({
     datesOutOfOffice,
     showOptimizedSlots,
     datesOutOfOfficeTimeZone,
+    businessHours,
   });
 };
 

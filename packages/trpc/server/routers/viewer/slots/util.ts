@@ -569,7 +569,10 @@ export class AvailableSlotsService {
 
             const selectedDuration = (duration || eventType.length) ?? 0;
 
-            const { title: durationTitle, source: durationSource } = LimitSources.eventDurationLimit({ limit, unit });
+            const { title: durationTitle, source: durationSource } = LimitSources.eventDurationLimit({
+              limit,
+              unit,
+            });
 
             if (selectedDuration > limit) {
               limitManager.addBusyTime({
@@ -675,6 +678,33 @@ export class AvailableSlotsService {
 
     return startTimeMin.isAfter(startTime) ? startTimeMin.tz(timeZone) : startTime;
   }
+
+  /**
+   * Extract business hours from all users availability
+   * Returns the first user's working hours, or null if not available
+   */
+  private getBusinessHoursFromAvailability(
+    allUsersAvailability: Array<{
+      workingHours: import("@calcom/types/schedule").WorkingHours[];
+    }>
+  ) {
+    if (!allUsersAvailability || allUsersAvailability.length === 0) {
+      return undefined;
+    }
+
+    const firstUserWorkingHours = allUsersAvailability[0].workingHours;
+    if (!firstUserWorkingHours || firstUserWorkingHours.length === 0) {
+      return undefined;
+    }
+
+    // Convert WorkingHours to the format expected by getSlots
+    return firstUserWorkingHours.map((wh) => ({
+      days: wh.days,
+      startTime: wh.startTime,
+      endTime: wh.endTime,
+    }));
+  }
+
   private async calculateHostsAndAvailabilities({
     input,
     eventType,
@@ -830,7 +860,15 @@ export class AvailableSlotsService {
     /* We get all users working hours and busy slots */
     const allUsersAvailability = premappedUsersAvailability.map(
       (
-        { busy, dateRanges, oooExcludedDateRanges, currentSeats: _currentSeats, timeZone, datesOutOfOffice },
+        {
+          busy,
+          dateRanges,
+          oooExcludedDateRanges,
+          currentSeats: _currentSeats,
+          timeZone,
+          datesOutOfOffice,
+          workingHours,
+        },
         index
       ) => {
         const currentUser = users[index];
@@ -840,6 +878,7 @@ export class AvailableSlotsService {
           dateRanges,
           oooExcludedDateRanges,
           busy,
+          workingHours,
           user: currentUser,
           datesOutOfOffice,
         };
@@ -1088,6 +1127,9 @@ export class AvailableSlotsService {
       }
     }
 
+    // Extract business hours after fallback logic to ensure we have the correct availability data
+    const businessHours = this.getBusinessHoursFromAvailability(allUsersAvailability);
+
     const timeSlots = getSlots({
       inviteeDate: startTime,
       eventLength: input.duration || eventType.length,
@@ -1098,6 +1140,7 @@ export class AvailableSlotsService {
       datesOutOfOffice: allUsersAvailability[0]?.datesOutOfOffice,
       showOptimizedSlots: eventType.showOptimizedSlots,
       datesOutOfOfficeTimeZone: allUsersAvailability[0]?.timeZone,
+      businessHours,
     });
 
     let availableTimeSlots: typeof timeSlots = [];
