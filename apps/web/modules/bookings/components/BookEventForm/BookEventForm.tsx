@@ -20,6 +20,7 @@ import { useMemo, useState } from "react";
 import type { FieldError } from "react-hook-form";
 import type { IUseBookingErrors, IUseBookingLoadingStates } from "../../hooks/useBookings";
 import { BookingFields } from "./BookingFields";
+import { OutsideBusinessHoursWarning } from "./OutsideBusinessHoursWarning";
 import { FormSkeleton } from "./Skeleton";
 
 type BookEventFormProps = {
@@ -64,7 +65,8 @@ export const BookEventForm = ({
   eventQuery: {
     isError: boolean;
     isPending: boolean;
-    data?: Pick<BookerEvent, "price" | "currency" | "metadata" | "bookingFields" | "locations"> | null;
+    data?: Pick<BookerEvent, "price" | "currency" | "metadata" | "bookingFields" | "locations"> &
+      Partial<Pick<BookerEvent, "length">> | null;
   };
 }) => {
   const eventType = eventQuery.data;
@@ -123,6 +125,7 @@ export const BookEventForm = ({
         form={bookingForm}
         handleSubmit={onSubmit}
         noValidate>
+        {!isPlatform && <OutsideBusinessHoursWarning timeslot={timeslot} defaultLength={eventType.length} />}
         <BookingFields
           isDynamicGroupBooking={!!(username && username.indexOf("+") > -1)}
           fields={eventType.bookingFields}

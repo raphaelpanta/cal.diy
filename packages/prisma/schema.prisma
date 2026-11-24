@@ -411,6 +411,7 @@ model User {
   avatarUrl           String?
   timeZone            String               @default("Europe/London")
   travelSchedules     TravelSchedule[]
+  businessHours       BusinessHours?
   weekStart           String               @default("Sunday")
   bufferTime          Int                  @default(0)
   hideBranding        Boolean              @default(false)
@@ -2848,4 +2849,32 @@ model AttributeSyncFieldMapping {
 
   @@unique([integrationAttributeSyncId, attributeId])
   @@index([integrationAttributeSyncId])
+}
+
+/// Horário comercial por usuário (feature exercicio-003). Ver CLAUDE.md.
+model BusinessHours {
+  id            Int                     @id @default(autoincrement())
+  userId        Int                     @unique
+  user          User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Offset UTC (minutos) do fuso do organizador no momento em que salvou. Fixo: não acompanha DST.
+  offsetMinutes Int
+  /// Fuso do organizador no momento em que salvou (informativo).
+  timeZone      String
+  /// [{ day: 0-6 (0 = domingo), start: minutos, end: minutos (<= 1440) }], já divididos por dia.
+  intervals     Json
+  overrides     BusinessHoursOverride[]
+  updatedAt     DateTime                @updatedAt
+}
+
+/// Override por data: substitui por completo a regra semanal do dia (data no fuso local do organizador).
+model BusinessHoursOverride {
+  id              Int           @id @default(autoincrement())
+  businessHoursId Int
+  businessHours   BusinessHours @relation(fields: [businessHoursId], references: [id], onDelete: Cascade)
+  /// YYYY-MM-DD no fuso do organizador
+  date            String
+  /// [{ start: minutos, end: minutos }]; vazio = dia fechado
+  intervals       Json
+
+  @@unique([businessHoursId, date])
 }

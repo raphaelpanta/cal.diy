@@ -27,6 +27,7 @@ export const ENDPOINTS = [
   "timezones",
   "slots",
   "travelSchedules",
+  "businessHours",
   "users",
   "viewer",
   "webhook",
