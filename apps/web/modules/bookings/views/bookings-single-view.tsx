@@ -67,7 +67,9 @@ import CancelBooking from "@calcom/web/components/booking/CancelBooking";
 import EventReservationSchema from "@calcom/web/components/schemas/EventReservationSchema";
 import { timeZone } from "@calcom/web/lib/clock";
 
+import { CopyBookingSummaryButton } from "../components/CopyBookingSummaryButton";
 import { usePaymentStatus } from "../hooks/usePaymentStatus";
+import { buildBookingSummary } from "../lib/buildBookingSummary";
 import type { PageProps } from "./bookings-single-view.getServerSideProps";
 
 const stringToBoolean = z
@@ -106,7 +108,7 @@ const useBrandColors = ({
 };
 
 export default function Success(props: PageProps) {
-  const { t } = useLocale();
+  const { t, i18n } = useLocale();
   const router = useRouter();
   const routerQuery = useRouterQuery();
   const pathname = usePathname();
@@ -282,6 +284,7 @@ export default function Success(props: PageProps) {
   const isRoundRobin = eventType.schedulingType === SchedulingType.ROUND_ROBIN;
 
   const eventName = getEventName(eventNameObject, true);
+  const bookingTitle = isRoundRobin && typeof bookingInfo.title === "string" ? bookingInfo.title : eventName;
   // Confirmation can be needed in two cases as of now
   // - Event Type has require confirmation option enabled always
   // - EventType has conditionally enabled confirmation option based on how far the booking is scheduled.
@@ -375,6 +378,25 @@ export default function Success(props: PageProps) {
 
   const providerName = guessEventLocationType(location)?.label;
   const rescheduleProviderName = guessEventLocationType(rescheduleLocation)?.label;
+  // When the booker's location differs from the stored one, the "Where" section shows the booker's.
+  const hasDifferentRescheduleLocation =
+    !!rescheduleLocation && locationToDisplay !== rescheduleLocationToDisplay;
+  const currentLocationToDisplay = hasDifferentRescheduleLocation
+    ? rescheduleLocationToDisplay
+    : locationToDisplay;
+
+  const getBookingSummary = (): string =>
+    buildBookingSummary({
+      title: bookingTitle,
+      startTime: date,
+      endTime: bookingInfo.endTime,
+      timeZone: tz,
+      locale: i18n.language,
+      is24h,
+      // "Where" is only rendered when there is a location to display
+      location: locationToDisplay ? currentLocationToDisplay : null,
+      t,
+    });
   const isBookingInPast = new Date(bookingInfo.endTime) < new Date();
   const isReschedulable = !isCancelled;
 
@@ -600,11 +622,7 @@ export default function Success(props: PageProps) {
                         <div
                           className="wrap-break-word col-span-2 mb-6 last:mb-0"
                           data-testid="booking-title">
-                          {isRoundRobin
-                            ? typeof bookingInfo.title === "string"
-                              ? bookingInfo.title
-                              : eventName
-                            : eventName}
+                          {bookingTitle}
                         </div>
                         <div className="font-medium">{t("when")}</div>
                         <div className="col-span-2 mb-6 last:mb-0">
@@ -683,7 +701,7 @@ export default function Success(props: PageProps) {
                           <>
                             <div className="mt-3 font-medium">{t("where")}</div>
                             <div className="col-span-2 mt-3" data-testid="where">
-                              {!rescheduleLocation || locationToDisplay === rescheduleLocationToDisplay ? (
+                              {!hasDifferentRescheduleLocation ? (
                                 <DisplayLocation
                                   locationToDisplay={locationToDisplay}
                                   providerName={providerName}
@@ -840,6 +858,12 @@ export default function Success(props: PageProps) {
                           );
                         })}
                       </div>
+                      {/* Not offered in embeds: the embed iframe only allows "payment", so Chromium blocks clipboard writes there */}
+                      {!isCancelled && !isEmbed && (
+                        <div className="mt-8 flex justify-center">
+                          <CopyBookingSummaryButton getSummary={getBookingSummary} />
+                        </div>
+                      )}
                     </div>
                     {requiresLoginToUpdate && (
                       <>

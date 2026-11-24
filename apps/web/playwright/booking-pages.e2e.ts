@@ -745,3 +745,41 @@ test.describe("Optional Email Field Validation", () => {
     await expect(page.getByTestId("success-page")).toBeVisible();
   });
 });
+
+test.describe("Booking success page summary", () => {
+  test("can copy the booking's title, date, time, time zone and location", async ({ page, users }) => {
+    const address = "Av. Paulista, 1000 - São Paulo";
+    const user = await users.create({
+      eventTypes: [
+        {
+          title: "In person meeting",
+          slug: "in-person-meeting",
+          length: 30,
+          locations: [{ type: "inPerson", address }],
+        },
+      ],
+    });
+
+    await page.goto(`/${user.username}/in-person-meeting`);
+    await selectFirstAvailableTimeSlotNextMonth(page);
+    await bookTimeSlot(page);
+    const successPage = page.getByTestId("success-page");
+    await expect(successPage).toBeVisible();
+
+    const copyButton = page.getByTestId("copy-booking-summary");
+    await copyButton.click();
+    await expect(copyButton).toHaveText("Copied!");
+
+    const lines = (await page.evaluate(() => navigator.clipboard.readText())).split("\n");
+    const labels = lines.map((line) => line.split(": ")[0]);
+    expect(labels).toEqual(["Title", "Date", "Time", "Timezone", "Location"]);
+    const [title, date, time, timeZone, location] = lines.map((line) => line.slice(line.indexOf(": ") + 2));
+
+    await expect(page.getByTestId("booking-title")).toHaveText(title);
+    // Date, time range and time zone are copied exactly as the "When" section shows them
+    await expect(successPage).toContainText(date);
+    await expect(successPage).toContainText(`${time} (${timeZone})`);
+    await expect(page.getByTestId("where")).toHaveText(address);
+    expect(location).toBe(address);
+  });
+});
