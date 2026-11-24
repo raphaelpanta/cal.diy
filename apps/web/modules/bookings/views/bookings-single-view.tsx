@@ -68,6 +68,7 @@ import EventReservationSchema from "@calcom/web/components/schemas/EventReservat
 import { timeZone } from "@calcom/web/lib/clock";
 
 import { usePaymentStatus } from "../hooks/usePaymentStatus";
+import { buildBookingSummary } from "../lib/buildBookingSummary";
 import type { PageProps } from "./bookings-single-view.getServerSideProps";
 
 const stringToBoolean = z
@@ -106,7 +107,7 @@ const useBrandColors = ({
 };
 
 export default function Success(props: PageProps) {
-  const { t } = useLocale();
+  const { t, i18n } = useLocale();
   const router = useRouter();
   const routerQuery = useRouterQuery();
   const pathname = usePathname();
@@ -706,6 +707,39 @@ export default function Success(props: PageProps) {
                               )}
                             </div>
                           </>
+                        )}
+                        {!isCancelled && (
+                          <div className="col-span-3 mt-4">
+                            <Button
+                              color="secondary"
+                              StartIcon="copy"
+                              data-testid="copy-booking-summary"
+                              onClick={async () => {
+                                const summary = buildBookingSummary({
+                                  title: eventName,
+                                  start: date,
+                                  durationMinutes: calculatedDuration ?? 0,
+                                  timeZone: tz,
+                                  locale: i18n.language,
+                                  is24h,
+                                  location: locationToDisplay,
+                                  labels: {
+                                    what: t("what"),
+                                    when: t("when"),
+                                    timezone: t("timezone"),
+                                    where: t("where"),
+                                  },
+                                });
+                                try {
+                                  await navigator.clipboard.writeText(summary);
+                                  showToast(t("booking_summary_copied"), "success");
+                                } catch {
+                                  showToast(t("unexpected_error_try_again"), "error");
+                                }
+                              }}>
+                              {t("copy_booking_summary")}
+                            </Button>
+                          </div>
                         )}
                         {props.paymentStatus && (
                           <>

@@ -446,6 +446,8 @@
   "what": "What",
   "when": "When",
   "where": "Where",
+  "copy_booking_summary": "Copy summary",
+  "booking_summary_copied": "Booking summary copied to clipboard",
   "add_to_calendar": "Add to calendar",
   "add_to_calendar_description": "Select where to add events when you're booked.",
   "add_events_to": "Add events to",
